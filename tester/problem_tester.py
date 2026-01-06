@@ -1,3 +1,4 @@
+from solver.oracle_solver import OracleSolver
 from solver.problem_solver import ProblemSolver
 from tester.instance_generator import InstanceGenerator
 from tester.metrics_collector import MetricsCollector
@@ -25,7 +26,9 @@ class ProblemTester:
                 client = self.generator.generate_client()
 
                 solver = self.solver_cls(employees, client)
-                result = self.metrics.evaluate(solver)
+                oracle = OracleSolver(employees, client)
+                result = self.metrics.evaluate_with_oracle(solver, oracle)
+
 
                 result["employees"] = n
                 self.metrics.results.append(result)

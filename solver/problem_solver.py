@@ -8,6 +8,7 @@ class ProblemSolver(ABC):
         self.employees = employees
         self.client = client
         self.best_solution: set[Employee] = set()
+        self.best_cost: float = float('inf')
     
     @abstractmethod
     def solve(self) -> set[Employee]:

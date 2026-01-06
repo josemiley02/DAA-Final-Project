@@ -8,6 +8,6 @@ pt = ProblemTester(solver_cls=BackatrackSolver,
                    generator=InstanceGenerator(), 
                    metrics=MetricsCollector())
 
-pt.run_experiment(employee_sizes=[50], repetitions=10)
+pt.run_experiment(employee_sizes=[10], repetitions=10)
 for result in pt.metrics.results:
     print(result)

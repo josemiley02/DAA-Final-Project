@@ -6,8 +6,6 @@ from solver.problem_solver import ProblemSolver
 class BackatrackSolver(ProblemSolver):
     def __init__(self, employees: set[Employee], client: Client):
         super().__init__(employees, client)
-        self.best_solution: set[Employee] = set()
-        self.best_cost: float = float('inf')
 
     def solve(self) -> set[Employee]:
         return self._solve(0, set(), 0)
