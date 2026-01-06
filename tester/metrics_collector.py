@@ -177,6 +177,8 @@ class MetricsCollector:
         algorithms = set(r.get("algorithm", "unknown") for r in self.results)
         
         for algo in algorithms:
+            if algo == "OracleSolver":
+                continue
             algo_results = [r for r in self.results if r.get("algorithm") == algo]
             
             times = [r["time_seconds"] for r in algo_results]
