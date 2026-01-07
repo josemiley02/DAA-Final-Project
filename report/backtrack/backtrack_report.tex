@@ -1,5 +1,6 @@
 \documentclass[12pt,a4paper]{article}
-\usepackage[utf-8]{inputenc}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
 \usepackage[spanish]{babel}
 \usepackage{amsmath}
 \usepackage{amssymb}
@@ -10,6 +11,7 @@
 \usepackage{algpseudocode}
 \usepackage{listings}
 \usepackage{geometry}
+\usepackage{float}
 
 \geometry{margin=1in}
 
@@ -257,10 +259,12 @@ El algoritmo de \textbf{Backtracking con Poda (Branch and Bound)} explora el esp
     \State \quad \textbf{return}
     \State \textbf{end if}
     
-    \State \textbf{Caso Base}: \textbf{if} $\text{pos} \geq |\text{employees}|$ \textbf{then} \textbf{return end if}
+    \State \textbf{Caso Base}: \textbf{if} $\text{pos} \geq |\text{employees}|$ \textbf{then} \textbf{return}
+    \State \textbf{end if}
     
     \State \textbf{Poda por Factibilidad}: $\text{uncovered} \gets \text{get\_uncovered\_requirements}(\text{selected})$
-    \State \textbf{if} $\neg \text{can\_potentially\_cover}(\text{pos}, \text{uncovered})$ \textbf{then} \textbf{return end if}
+    \State \textbf{if} $\neg \text{can\_potentially\_cover}(\text{pos}, \text{uncovered})$ \textbf{then} \textbf{return}
+    \State \textbf{end if}
     
     \State $\text{employee} \gets \text{employees\_list}[\text{pos}]$
     

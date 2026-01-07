@@ -1,0 +1,748 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[spanish]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{geometry}
+\usepackage{graphicx}
+\usepackage{float}
+
+\geometry{margin=1in}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definición}[section]
+\newtheorem{theorem}{Teorema}[section]
+\newtheorem{lemma}{Lema}[section]
+\newtheorem{corollary}{Corolario}[section]
+\newtheorem{proposition}{Proposición}[section]
+\newtheorem{remark}{Observación}[section]
+
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    breaklines=true,
+    tabsize=4
+}
+
+\title{Informe Técnico Completo:\\Problema de Selección Óptima de Talento}
+\author{Diseño y Análisis de Algoritmos}
+\date{\today}
+
+\begin{document}
+
+
+\maketitle
+\begin{center}
+    \includegraphics*[width=0.2\textwidth]{images/matcom.jpg}
+\end{center}
+
+\begin{center}
+\fcolorbox{blue!50!black}{blue!5}{
+\begin{minipage}{0.95\textwidth}
+\centering
+{\Large \textbf{Autores}}\\[4pt]
+\rule{0.9\textwidth}{0.6pt}\\[8pt]
+\begin{minipage}{0.30\textwidth}
+\centering
+\textbf{Javier A. González Díaz}\\
+\href{https://github.com/Javi111003}{github.com/Javi111003}\\
+\end{minipage}
+\hfill
+\begin{minipage}{0.30\textwidth}
+\centering
+\textbf{José M. Leyva de la Cruz}\\
+\href{https://github.com/josemiley02}{github.com/josemiley02}
+\end{minipage}
+\hfill
+\begin{minipage}{0.30\textwidth}
+\centering
+\textbf{Kevin Márquez Vega}\\
+\href{https://github.com/kmvega-05}{github.com/kmvega-05}
+\end{minipage}
+\end{minipage}
+}
+\end{center}
+
+\begin{abstract}
+Este informe presenta un análisis completo del problema de selección óptima de talento en la plataforma TalentBridge Connect. Se estudian tres enfoques algorítmicos: Backtracking con Poda, Programación Dinámica con Bitmask, y Algoritmo Greedy. Se demuestra que la versión de decisión del problema es NP-Completa (y por tanto la versión de optimización es NP-Hard) y se analizan las complejidades, garantías de optimalidad y aplicabilidad práctica de cada enfoque.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introducción General}
+
+El problema de Selección Óptima de Talento se presenta en el contexto de TalentBridge Connect, una plataforma que conecta clientes con freelancers especializados. El desafío consiste en encontrar el conjunto de empleados de costo mínimo que cubra todos los requisitos de habilidades especificados por un cliente, asegurando que cada habilidad requerida sea cubierta por al menos un empleado con el nivel de dominio mínimo exigido.
+
+Este problema, modelado como una variante del \textbf{Weighted Set Cover Problem}, es NP-Hard en su forma de optimización; su versión de decisión es NP-Completa, lo que justifica el estudio de múltiples enfoques algorítmicos con diferentes trade-offs entre optimalidad y eficiencia computacional.
+
+En este informe se presentan tres soluciones:
+\begin{itemize}
+    \item \textbf{Backtracking con Poda}: Garantiza optimalidad mediante exploración exhaustiva con podas inteligentes
+    \item \textbf{Programación Dinámica}: Solución exacta eficiente cuando el número de requerimientos es moderado
+    \item \textbf{Algoritmo Greedy}: Aproximación rápida con garantías teóricas de calidad
+\end{itemize}
+
+\section{Modelación Matemática del Problema}
+
+\subsection{Definición Formal}
+
+\begin{definition}[Problema de Cobertura de Habilidades Ponderado]
+
+Sea:
+\begin{itemize}
+    \item $E = \{e_1, e_2, \ldots, e_n\}$ el conjunto de empleados disponibles
+    \item $S = \{s_1, s_2, \ldots, s_k\}$ el conjunto de habilidades disponibles en el sistema
+    \item Para cada empleado $e_i \in E$: 
+    \begin{itemize}
+        \item $c_i \in \mathbb{R}_{\geq 0}$ su costo por hora (salario)
+        \item $L_i(s) \in \{0\} \cup [1, 10]$ el nivel de dominio en la habilidad $s$, donde $0$ indica que no posee la habilidad
+    \end{itemize}
+    \item $R = \{(s_j, l_j) : s_j \in S, l_j \in [1, 10]\}$ el conjunto de requerimientos del cliente, donde $(s_j, l_j)$ significa que se requiere habilidad $s_j$ con nivel mínimo $l_j$
+\end{itemize}
+
+El problema (de optimización) consiste en encontrar un subconjunto $X \subseteq E$ tal que:
+
+\begin{equation}
+\min \sum_{e_i \in X} c_i
+\end{equation}
+
+sujeto a la restricción de cobertura:
+
+\begin{equation}
+\forall (s_j, l_j) \in R, \exists e_i \in X : L_i(s_j) \geq l_j
+\end{equation}
+
+Es decir, todo requerimiento debe ser cubierto por al menos un empleado seleccionado con el nivel de dominio suficiente.
+
+\end{definition}
+
+\begin{definition}[Versión de decisión]
+Dada una cota de presupuesto $B \in \mathbb{R}_{\ge 0}$, la versión de decisión pregunta si existe $X \subseteq E$ tal que:
+\[
+\sum_{e_i \in X} c_i \le B
+\quad \text{y} \quad
+\forall (s_j,l_j)\in R,\ \exists e_i\in X:\ L_i(s_j)\ge l_j.
+\]
+\end{definition}
+
+\subsection{Relación con Problemas Clásicos de Complejidad}
+
+Este problema es una \textbf{variante ponderada del Weighted Set Cover Problem} (WSC), uno de los problemas NP-Hard más estudiados en ciencia de la computación.
+
+\subsubsection{Mapeo al Problema de Cobertura de Conjuntos}
+
+Podemos transformar formalmente nuestro problema en una instancia de WSC:
+
+\begin{itemize}
+    \item El universo $U$ está compuesto por todos los pares (habilidad, nivel): $U = R$
+    \item Cada empleado $e_i$ representa un conjunto $A_i = \{(s, l) \in R : L_i(s) \geq l\}$, es decir, el conjunto de requisitos que puede cubrir
+    \item El peso de cada conjunto es $w(A_i) = c_i$ (costo del empleado)
+    \item El objetivo es encontrar $X \subseteq E$ tal que $\bigcup_{e_i \in X} A_i = U$ minimizando $\sum_{e_i \in X} c_i$
+\end{itemize}
+
+Esta transformación es una reducción polinomial que preserva soluciones óptimas.
+
+\subsection{Demostración de NP-Completitud}
+
+\begin{theorem}[NP-Completitud (versión de decisión) y NP-Hardness (optimización)]
+La versión de decisión del problema de selección óptima de talento es NP-Completa. En consecuencia, la versión de optimización es NP-Hard.
+\end{theorem}
+
+\begin{proof}
+La demostración procede por reducción polinomial desde \textbf{Set Cover Ponderado (WSC)} en su versión de decisión.
+
+Dada una instancia de WSC: $(U, \mathcal{A}, w, B)$ donde:
+\begin{itemize}
+    \item $U = \{u_1, u_2, \ldots, u_m\}$ es el universo
+    \item $\mathcal{A} = \{A_1, A_2, \ldots, A_n\}$ donde cada $A_i \subseteq U$
+    \item $w : \mathcal{A} \to \mathbb{R}_{\ge 0}$ es la función de peso
+    \item $B$ es la cota de presupuesto
+\end{itemize}
+construimos una instancia de nuestro problema en tiempo polinomial:
+
+\begin{itemize}
+    \item Para cada $u_j \in U$, creamos una habilidad abstracta $s_j$ con requerimiento $(s_j, 1)$
+    \item Para cada $A_i \in \mathcal{A}$, creamos un empleado $e_i$ con:
+    \begin{itemize}
+        \item Costo $c_i = w(A_i)$
+        \item Habilidades: $L_i(s_j) = 1$ si $u_j \in A_i$, y $L_i(s_j) = 0$ en caso contrario
+    \end{itemize}
+    \item El cliente requiere todas las habilidades: $R = \{(s_1, 1), (s_2, 1), \ldots, (s_m, 1)\}$ y el presupuesto es el mismo $B$.
+\end{itemize}
+
+Existe una cobertura de costo $\le B$ en WSC si y solo si existe una selección de empleados de costo $\le B$ que cubra todos los requerimientos.
+
+Finalmente, el problema está en NP porque, dada una solución candidata $X$, puede verificarse en tiempo polinomial si cubre todos los requerimientos y si el costo total es $\le B$.
+\end{proof}
+
+\begin{corollary}
+Bajo la conjetura $P \neq NP$, no existe un algoritmo de tiempo polinomial que resuelva nuestro problema de optimización de forma óptima. Los mejores algoritmos exactos conocidos tienen complejidad exponencial en el peor caso.
+\end{corollary}
+
+\subsection{Estructuras de Datos}
+
+\begin{definition}[Habilidad]
+Una \textbf{habilidad} (Skill) es una capacidad profesional discreta. Los niveles de dominio se representan en una escala de 1 a 10.
+\end{definition}
+
+\begin{definition}[Empleado]
+Un \textbf{empleado} (Employee) representa un freelancer con atributos: id, nombre, salario por hora, y mapeo de habilidades a niveles de dominio.
+\end{definition}
+
+\begin{definition}[Cliente]
+Un \textbf{cliente} (Client) representa una solicitud con requisitos: mapeo de habilidades requeridas a niveles mínimos.
+\end{definition}
+
+\begin{definition}[Solución]
+Una \textbf{solución} (Solution) contiene: conjunto de empleados seleccionados, costo total, e indicador de validez.
+\end{definition}
+
+\newpage
+
+\part{Enfoque 1: Backtracking con Poda}
+
+\section{Descripción del Algoritmo de Backtracking}
+
+El algoritmo de \textbf{Backtracking con Poda (Branch and Bound)} explora el espacio de soluciones de forma sistemática, eliminando ramas que demostablemente no pueden conducir a una solución mejor que la actual.
+
+\subsection{Pseudocódigo}
+
+\begin{algorithm}[H]
+\caption{Backtracking con Poda para Selección de Talento}
+\begin{algorithmic}[1]
+\Function{Backtrack}{$\text{pos}, \text{selected}, \text{current\_cost}$}
+    \State \textbf{Poda por Costo}: \textbf{if} $\text{current\_cost} \geq \text{best\_solution.cost}$ \textbf{then} \textbf{return}
+    
+    \State \textbf{Verificación de Solución}: \textbf{if} $\text{is\_complete\_cover}(\text{selected})$ \textbf{then}
+    \State \quad \text{best\_solution} $\gets$ \text{Solution}(\text{selected}, \text{current\_cost})
+    \State \quad \textbf{return}
+    \State \textbf{end if}
+    
+    \State \textbf{Caso Base}: \textbf{if} $\text{pos} \geq |\text{employees}|$ \textbf{then} \textbf{return}
+    \State \textbf{end if}
+    
+    \State \textbf{Poda por Factibilidad}: $\text{uncovered} \gets \text{get\_uncovered\_requirements}(\text{selected})$
+    \State \textbf{if} $\neg \text{can\_potentially\_cover}(\text{pos}, \text{uncovered})$ \textbf{then} \textbf{return}
+    \State \textbf{end if}
+    
+    \State $\text{employee} \gets \text{employees\_list}[\text{pos}]$
+    
+    \State \textbf{Rama 1 - Incluir}: \textbf{if} $\text{can\_cover\_any\_requirement}(\text{employee}, \text{uncovered})$ \textbf{then}
+    \State \quad \text{selected.add}(\text{employee})
+    \State \quad \Call{Backtrack}{pos+1, selected, current\_cost + employee.salary}
+    \State \quad \text{selected.remove}(\text{employee})
+    \State \textbf{end if}
+    
+    \State \textbf{Rama 2 - Excluir}:
+    \State \quad \Call{Backtrack}{pos+1, selected, current\_cost}
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Estrategias de Poda}
+
+\subsubsection{Poda por Costo (Cost Pruning)}
+
+\begin{definition}[Poda por Costo]
+Si el costo acumulado $\text{current\_cost}$ es mayor o igual al mejor costo encontrado ($\text{best\_cost}$), la rama se elimina:
+\[
+\text{si } \text{current\_cost} \geq \text{best\_cost} \text{ entonces podar.}
+\]
+\end{definition}
+
+\begin{lemma}[Seguridad de la Poda por Costo]
+Si $c_i \ge 0$ para todo empleado, entonces la poda por costo no elimina ninguna solución mejor que la mejor encontrada hasta el momento.
+\end{lemma}
+
+\begin{proof}
+En cualquier rama, agregar empleados solo puede aumentar (o mantener) el costo acumulado. Si $\text{current\_cost} \ge \text{best\_cost}$, ninguna extensión de esa rama puede producir una solución con costo menor que $\text{best\_cost}$.
+\end{proof}
+
+\subsubsection{Poda por Factibilidad (Feasibility Pruning)}
+
+\begin{definition}[Poda por Factibilidad]
+Si los empleados restantes no pueden cubrir los requerimientos pendientes, la rama se elimina.
+\end{definition}
+
+\begin{lemma}[Seguridad de la Poda por Factibilidad]
+Si $\text{can\_potentially\_cover}(\text{pos}, \text{uncovered})$ retorna \texttt{false} solo cuando \emph{ningún} subconjunto de empleados desde \texttt{pos} puede cubrir \texttt{uncovered}, entonces la poda por factibilidad no elimina soluciones válidas.
+\end{lemma}
+
+\begin{proof}
+Bajo la condición del enunciado, si la función devuelve \texttt{false} entonces no existe continuación posible que complete la cobertura; por tanto, podar es correcto.
+\end{proof}
+
+\subsection{Correctitud del Algoritmo de Backtracking}
+
+\begin{theorem}[Correctitud del Backtracking]
+Si el algoritmo termina, retorna una solución óptima (si existe) o declara que no existe solución válida.
+\end{theorem}
+
+\begin{proof}
+Por construcción, el algoritmo explora recursivamente las decisiones incluir/excluir para cada empleado (completitud). Solo actualiza la mejor solución cuando la cobertura es completa (validez). Las podas son seguras por los lemas anteriores, por lo que no descartan soluciones mejores. Así, la mejor solución registrada al finalizar es óptima.
+\end{proof}
+
+\subsection{Análisis de Complejidad de Backtracking}
+
+\begin{theorem}[Complejidad Temporal del Peor Caso]
+La complejidad temporal en el peor caso es $O(2^n \cdot \mathrm{poly}(n,m))$, donde $n = |E|$ y $m = |R|$.
+\end{theorem}
+
+\begin{proof}
+El árbol de decisión tiene hasta $2^{n+1}-1$ nodos. En cada nodo se realizan operaciones polinomiales (verificación de cobertura/actualización de requerimientos y podas). Por tanto, el tiempo es $O(2^n \cdot \mathrm{poly}(n,m))$.
+\end{proof}
+
+\begin{proposition}[Efectividad de la Poda]
+En instancias prácticas, el número de nodos visitados se reduce a $O(c^n)$ donde $c < 2$.
+\end{proposition}
+
+\begin{theorem}[Complejidad Espacial]
+La complejidad espacial es $O(n + m)$.
+\end{theorem}
+
+\newpage
+
+\part{Enfoque 2: Programación Dinámica}
+
+\section{Descripción del Enfoque de Programación Dinámica}
+
+Aunque el problema es NP-Hard en general, cuando el número de requerimientos ($m$) es moderado, el problema exhibe propiedades que permiten una solución exacta eficiente mediante \textbf{Programación Dinámica con Bitmask}.
+
+\subsection{Representación mediante Máscaras de Bits}
+
+\begin{definition}[Máscara de Cobertura]
+Para un subconjunto $T \subseteq R$ de requerimientos, su \textbf{máscara de cobertura} es:
+\[
+\text{mask}(T) = \sum_{r_j \in T} 2^j
+\]
+El bit $j$-ésimo es 1 si y solo si $r_j \in T$.
+\end{definition}
+
+\begin{definition}[Máscara de un Empleado]
+Para un empleado $e_i$, su \textbf{máscara de habilidades} $M_i$ representa los requerimientos que puede satisfacer:
+\[
+M_i = \sum_{\{j : L_i(s_j) \geq l_j\}} 2^j
+\]
+\end{definition}
+
+\begin{definition}[Estado de la tabla DP]
+$DP[S]$ denota el costo mínimo para cubrir \textbf{al menos} todos los requerimientos cuyos bits están en 1 en la máscara $S$, usando un subconjunto de los empleados ya procesados por el algoritmo (patrón 0/1).
+\end{definition}
+
+\begin{remark}[Motivación para DP]
+Mientras Backtracking tiene complejidad exponencial en $n$, DP logra $O(n \cdot 2^m)$, exponencial solo en $m$. En aplicaciones reales, típicamente $m \ll n$.
+\end{remark}
+
+\subsection{Principios de Programación Dinámica}
+
+\begin{theorem}[Subestructura Óptima]
+Sea $\text{OPT}(S, i)$ el costo mínimo para cubrir los requerimientos en la máscara $S$ usando empleados $\{e_1, \ldots, e_i\}$. Entonces:
+\begin{equation}
+\text{OPT}(S, i) = \min\{\text{OPT}(S, i-1), \text{OPT}(S \land \neg M_i, i-1) + c_i\}
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Una solución óptima $X^*$ para cubrir $S$ con $\{e_1, \ldots, e_i\}$ considera dos casos:
+
+\textbf{Caso 1}: Si $e_i \notin X^*$, entonces el costo es $\text{OPT}(S, i-1)$.
+
+\textbf{Caso 2}: Si $e_i \in X^*$, entonces $X^* \setminus \{e_i\}$ debe cubrir $S \land \neg M_i$ con costo $\text{OPT}(S \land \neg M_i, i-1) + c_i$.
+\end{proof}
+
+\begin{proposition}[Superposición de Subproblemas]
+El número de subproblemas distintos está acotado por $2^m$ (número de subconjuntos de $R$), no por $2^n$.
+\end{proposition}
+
+\subsection{Algoritmo de DP}
+
+\begin{algorithm}[H]
+\caption{Preprocesamiento de Máscaras}
+\begin{algorithmic}[1]
+\Function{ComputeMasks}{$\text{employees}, \text{requirements}$}
+    \State $\text{masks} \gets \text{empty dictionary}$
+    \For{\textbf{each} $e \in \text{employees}$}
+        \State $M_e \gets 0$
+        \For{$j \gets 0$ \textbf{to} $|\text{requirements}| - 1$}
+            \State $(s_j, l_j) \gets \text{requirements}[j]$
+            \If{$e.\text{skill\_level}(s_j) \geq l_j$}
+                \State $M_e \gets M_e \mid (1 \ll j)$
+            \EndIf
+        \EndFor
+        \If{$M_e \neq 0$}
+            \State $\text{masks}[e] \gets M_e$
+        \EndIf
+    \EndFor
+    \State \textbf{return} $\text{masks}$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\begin{algorithm}[H]
+\caption{Programación Dinámica con Bitmask}
+\begin{algorithmic}[1]
+\Function{SolveDP}{$\text{employees}, \text{requirements}$}
+    \State $m \gets |\text{requirements}|$
+    \State $\text{FULL\_MASK} \gets (1 \ll m) - 1$
+    \State $\text{masks} \gets \Call{ComputeMasks}{\text{employees}, \text{requirements}}$
+    
+    \State $DP \gets \text{Array}[0 \ldots \text{FULL\_MASK}]$ initialized to $\infty$
+    \State $\text{parent} \gets \text{Array}[0 \ldots \text{FULL\_MASK}]$ initialized to $\text{None}$
+    \State $DP[0] \gets 0$
+    
+    \For{\textbf{each} $(e, M_e) \in \text{masks}$}
+        \State $c_e \gets e.\text{cost}$
+        \For{$S \gets \text{FULL\_MASK}$ \textbf{downto} $0$}
+            \If{$DP[S] < \infty$}
+                \State $\text{next\_S} \gets S \mid M_e$
+                \If{$DP[S] + c_e < DP[\text{next\_S}]$}
+                    \State $DP[\text{next\_S}] \gets DP[S] + c_e$
+                    \State $\text{parent}[\text{next\_S}] \gets (e, S)$
+                \EndIf
+            \EndIf
+        \EndFor
+    \EndFor
+    
+    \If{$DP[\text{FULL\_MASK}] = \infty$}
+        \State \textbf{return} $(\text{None}, \infty)$
+    \EndIf
+    
+    \State $\text{selected} \gets \emptyset$
+    \State $S \gets \text{FULL\_MASK}$
+    \While{$S \neq 0$}
+        \State $(e, \text{prev\_S}) \gets \text{parent}[S]$
+        \State $\text{selected}.\text{add}(e)$
+        \State $S \gets \text{prev\_S}$
+    \EndWhile
+    
+    \State \textbf{return} $(\text{selected}, DP[\text{FULL\_MASK}])$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Correctitud del Algoritmo de DP}
+
+\begin{theorem}[Correctitud del Algoritmo DP]
+El algoritmo retorna siempre el costo mínimo posible para cubrir todos los requerimientos, si existe una solución factible.
+\end{theorem}
+
+\begin{proof}
+Por inducción sobre el número de empleados procesados.
+
+\textbf{Invariante}: Después de procesar $i$ empleados, $DP[S]$ contiene el costo mínimo para cubrir \textbf{al menos} los requerimientos en $S$ usando un subconjunto de $\{e_1, \ldots, e_i\}$.
+
+\textbf{Caso Base}: $DP[0] = 0$, $DP[S] = \infty$ para $S \neq 0$.
+
+\textbf{Paso Inductivo}: Al procesar $e_i$, la iteración inversa implementa la recurrencia 0/1:
+\[
+\text{OPT}(S, i) = \min\{\text{OPT}(S, i-1), \text{OPT}(S \land \neg M_i, i-1) + c_i\}.
+\]
+Por tanto, el invariante se preserva y al final $DP[\text{FULL\_MASK}]$ es óptimo.
+\end{proof}
+
+\subsection{Análisis de Complejidad de DP}
+
+\begin{theorem}[Complejidad Temporal]
+La complejidad temporal es $\Theta(n \cdot 2^m)$, donde $n$ es el número de empleados y $m$ es el número de requerimientos.
+\end{theorem}
+
+\begin{proof}
+\textbf{Preprocesamiento}: $O(n \cdot m)$.
+
+\textbf{Bucle Principal}: $n$ iteraciones externas, $2^m$ estados internos, $O(1)$ por transición: $O(n \cdot 2^m)$.
+
+\textbf{Reconstrucción}: $O(n)$.
+
+Por tanto, $T(n,m) = O(n \cdot 2^m)$.
+\end{proof}
+
+\begin{theorem}[Complejidad Espacial]
+La complejidad espacial es $\Theta(2^m)$.
+\end{theorem}
+
+\subsection{Fixed-Parameter Tractability (FPT)}
+
+\begin{theorem}[FPT con Parámetro $m$]
+El problema es FPT cuando se parametriza por el número de requerimientos $m$.
+\end{theorem}
+
+\begin{proof}
+La complejidad $T(n, m) = 2^m \cdot n$ cumple la definición de FPT con $f(k) = 2^k$ y $|I| = n$.
+\end{proof}
+
+\newpage
+
+\part{Enfoque 3: Algoritmo Greedy}
+
+\section{Descripción del Algoritmo Greedy}
+
+El algoritmo \textbf{Greedy (Codicioso)} es un algoritmo de \textbf{aproximación} que intercambia optimalidad por eficiencia computacional.
+
+\subsection{Estrategia General}
+
+\begin{enumerate}
+    \item \textbf{Inicializar}: Comenzar con conjunto vacío de empleados
+    \item \textbf{Iterar}: Mientras existan requerimientos no cubiertos:
+    \begin{enumerate}
+        \item Calcular eficiencia de cada empleado disponible
+        \item Seleccionar empleado con máxima eficiencia
+        \item Actualizar requerimientos pendientes
+    \end{enumerate}
+    \item \textbf{Terminar}: Cuando no hay más requerimientos o empleados útiles
+\end{enumerate}
+
+\subsection{Función de Eficiencia}
+
+\begin{definition}[Eficiencia de un Empleado]
+Para un empleado $e_i$ y requerimientos no cubiertos $U$:
+\[
+\text{eficiencia}(e_i, U) = \frac{|\{r \in U : e_i \text{ puede cubrir } r\}|}{c_i}
+\]
+Esta métrica favorece empleados que cubren muchos requerimientos a bajo costo.
+\end{definition}
+
+\subsection{Pseudocódigo}
+
+\begin{algorithm}[H]
+\caption{Algoritmo Greedy para Selección de Talento}
+\begin{algorithmic}[1]
+\Function{Greedy}{$\text{employees}, \text{requirements}$}
+    \State $\text{selected} \gets \emptyset$
+    \State $\text{available} \gets \text{employees}$
+    \State $\text{uncovered} \gets \text{requirements}$
+    \State $\text{total\_cost} \gets 0$
+    
+    \While{$\text{uncovered} \neq \emptyset$ \textbf{and} $\text{available} \neq \emptyset$}
+        \State $\text{best\_employee} \gets \text{nil}$
+        \State $\text{best\_efficiency} \gets 0$
+        
+        \For{\textbf{each} $e \in \text{available}$}
+            \State $\text{coverage} \gets |\{r \in \text{uncovered} : e \text{ cubre } r\}|$
+            \If{$\text{coverage} > 0$}
+                \State $\text{eff} \gets \frac{\text{coverage}}{c_e}$ \Comment{$c_e$ es el costo de $e$}
+                \If{$\text{eff} > \text{best\_efficiency}$}
+                    \State $\text{best\_employee} \gets e$
+                    \State $\text{best\_efficiency} \gets \text{eff}$
+                \EndIf
+            \EndIf
+        \EndFor
+        
+        \If{$\text{best\_employee} = \text{nil}$}
+            \State \textbf{break}
+        \EndIf
+        
+        \State $\text{selected.add}(\text{best\_employee})$
+        \State $\text{available.remove}(\text{best\_employee})$
+        \State $\text{total\_cost} \gets \text{total\_cost} + c_{\text{best\_employee}}$
+        
+        \State \Comment{Eliminar de uncovered los requerimientos cubiertos por best\_employee}
+        \For{\textbf{each} $r \in \text{uncovered}$}
+            \If{$\text{best\_employee cubre } r$}
+                \State $\text{uncovered.remove}(r)$
+            \EndIf
+        \EndFor
+    \EndWhile
+    
+    \State $\text{is\_valid} \gets (\text{uncovered} = \emptyset)$
+    \State \textbf{return} Solution($\text{selected}, \text{total\_cost}, \text{is\_valid}$)
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Garantía de Aproximación}
+
+\begin{theorem}[Garantía de Aproximación del Greedy]
+Sea $C^*$ el costo óptimo y $C_G$ el costo greedy. Si la solución greedy es válida:
+\[
+C_G \leq C^* \cdot H(m)
+\]
+donde $H(m) = 1 + \frac{1}{2} + \cdots + \frac{1}{m}$ es el $m$-ésimo número armónico.
+\end{theorem}
+
+\begin{proof}
+Este es el resultado clásico para \emph{Set Cover Ponderado} usando selección codiciosa por ganancia marginal/costo. Una demostración completa puede encontrarse en textos estándar de aproximación, por ejemplo~\cite{vazirani2001approximation,williamsom2011design}.
+\end{proof}
+
+\begin{corollary}[Implicaciones Prácticas]
+Para problemas con:
+\begin{itemize}
+    \item $m = 5$ requerimientos: $H(5) \approx 2.28$
+    \item $m = 10$ requerimientos: $H(10) \approx 2.93$
+    \item $m = 20$ requerimientos: $H(20) \approx 3.60$
+\end{itemize}
+El número armónico crece logarítmicamente.
+\end{corollary}
+
+\subsection{Correctitud del Algoritmo Greedy}
+
+\begin{theorem}[Validez de la Solución Greedy]
+Si el algoritmo retorna una solución válida, entonces cubre todos los requerimientos del cliente.
+\end{theorem}
+
+\begin{theorem}[Completitud del Algoritmo]
+El algoritmo greedy siempre termina en a lo sumo $n$ iteraciones.
+\end{theorem}
+
+\subsection{Análisis de Complejidad del Greedy}
+
+\begin{theorem}[Complejidad Temporal]
+La complejidad temporal es $O(n^2 \cdot m)$, donde $n = |E|$ y $m = |R|$.
+\end{theorem}
+
+\begin{proof}
+El bucle while itera a lo sumo $n$ veces. En cada iteración:
+\begin{itemize}
+    \item Búsqueda del mejor empleado: $O(n \cdot m)$
+    \item Actualización de requerimientos: $O(m)$
+\end{itemize}
+Total: $T(n, m) = n \times O(n \cdot m) = O(n^2 \cdot m)$.
+\end{proof}
+
+\begin{theorem}[Complejidad Espacial]
+La complejidad espacial es $O(n + m)$.
+\end{theorem}
+
+\newpage
+
+\section{Comparación de los Tres Enfoques}
+
+\subsection{Tabla Comparativa de Complejidad}
+
+\begin{center}
+\begin{tabular}{|l|c|c|c|}
+\hline
+\textbf{Métrica} & \textbf{Backtracking} & \textbf{DP} & \textbf{Greedy} \\
+\hline
+Mejor caso & $O(\mathrm{poly}(n,m))$ & $O(n \cdot 2^m)$ & $O(n \cdot m)$ \\
+Caso promedio & $O(c^n \cdot \mathrm{poly}(n,m))$ & $O(n \cdot 2^m)$ & $O(k \cdot n m)$ \\
+Peor caso & $O(2^n \cdot \mathrm{poly}(n,m))$ & $O(n \cdot 2^m)$ & $O(n^2 \cdot m)$ \\
+Espacio & $O(n + m)$ & $O(2^m)$ & $O(n + m)$ \\
+\hline
+\textbf{Garantía} & Óptima & Óptima & $H(m)$-aprox \\
+\textbf{Ideal para} & $n \leq 20$ & $m \leq 20$ & $n$ o $m$ grandes \\
+\hline
+\end{tabular}
+\end{center}
+
+\subsection{Criterios de Selección}
+
+La elección del algoritmo debe basarse en:
+
+\begin{itemize}
+    \item \textbf{Backtracking}: 
+    \begin{itemize}
+        \item Instancias pequeñas ($n \leq 16-20$)
+        \item Cuando se requiere optimalidad garantizada
+        \item Casos donde la poda es efectiva
+    \end{itemize}
+    
+    \item \textbf{Programación Dinámica}:
+    \begin{itemize}
+        \item Pocos requerimientos ($m \leq 20$)
+        \item Cuando se requiere optimalidad garantizada
+        \item Suficiente memoria disponible ($O(2^m)$)
+    \end{itemize}
+    
+    \item \textbf{Greedy}:
+    \begin{itemize}
+        \item Instancias grandes (cualquier $n$ o $m$)
+        \item Tiempo de respuesta crítico
+        \item Aproximación aceptable
+        \item Recursos computacionales limitados
+    \end{itemize}
+\end{itemize}
+
+\subsection{Trade-offs Fundamentales}
+
+\begin{center}
+\begin{tabular}{|l|p{3cm}|p{3cm}|p{3cm}|}
+\hline
+\textbf{Aspecto} & \textbf{Backtracking} & \textbf{DP} & \textbf{Greedy} \\
+\hline
+Velocidad & Lenta para $n > 20$ & Media para $m \leq 20$ & Rápida siempre \\
+\hline
+Optimalidad & Garantizada & Garantizada & Aproximada ($H(m)$) \\
+\hline
+Escalabilidad & Limitada en $n$ & Limitada en $m$ & Excelente \\
+\hline
+Memoria & Baja & Alta ($2^m$) & Baja \\
+\hline
+Implementación & Moderada & Moderada & Simple \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Conclusiones Generales}
+
+\begin{enumerate}
+    \item La versión de decisión del problema de Selección Óptima de Talento es \textbf{NP-Completa}, y su versión de optimización es \textbf{NP-Hard}, lo que justifica el estudio de múltiples enfoques con diferentes características.
+    
+    \item \textbf{Backtracking con Poda}:
+    \begin{itemize}
+        \item Garantiza optimalidad con complejidad exponencial en $n$
+        \item Estrategias de poda reducen significativamente el espacio de búsqueda
+        \item Viable para instancias pequeñas-medianas ($n \leq 20$)
+    \end{itemize}
+    
+    \item \textbf{Programación Dinámica}:
+    \begin{itemize}
+        \item Garantiza optimalidad con complejidad $O(n \cdot 2^m)$
+        \item Es FPT parametrizado por $m$
+        \item Viable cuando $m \leq 20$ (típico en aplicaciones reales)
+        \item Requiere $O(2^m)$ espacio
+    \end{itemize}
+    
+    \item \textbf{Algoritmo Greedy}:
+    \begin{itemize}
+        \item Complejidad polinomial $O(n^2 \cdot m)$
+        \item Garantía de aproximación $H(m)$ (logarítmica en $m$)
+        \item Excelente escalabilidad para instancias grandes
+        \item En práctica, brecha con óptimo menor que factor teórico
+    \end{itemize}
+    
+    \item La elección del algoritmo debe considerar:
+    \begin{itemize}
+        \item Tamaño de la instancia ($n$ y $m$)
+        \item Requisito de optimalidad vs. tiempo
+        \item Recursos computacionales disponibles
+        \item Naturaleza del dominio de aplicación
+    \end{itemize}
+    
+    \item Para sistemas de producción, una estrategia híbrida es recomendable:
+    \begin{itemize}
+        \item Usar DP cuando $m \leq 20$
+        \item Usar Backtracking cuando $n \leq 20$ y $m > 20$
+        \item Usar Greedy como fallback o para respuesta rápida
+        \item Combinar Greedy con búsqueda local para mejorar calidad
+    \end{itemize}
+\end{enumerate}
+
+\begin{thebibliography}{9}
+\bibitem{gj1979}
+Garey, M. R., \& Johnson, D. S. (1979).
+\textit{Computers and Intractability: A Guide to the Theory of NP-Completeness}.
+W. H. Freeman.
+
+\bibitem{vazirani2001approximation}
+Vazirani, V. V. (2001).
+\textit{Approximation Algorithms}.
+Springer.
+
+\bibitem{williamsom2011design}
+Williamson, D. P., \& Shmoys, D. B. (2011).
+\textit{The Design of Approximation Algorithms}.
+Cambridge University Press.
+\end{thebibliography}
+
+\end{document}
