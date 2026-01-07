@@ -1,0 +1,400 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[spanish]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{geometry}
+\usepackage{graphicx}
+
+\geometry{margin=1in}
+
+\theoremstyle{definition}
+\newtheorem{definition}{Definición}[section]
+\newtheorem{theorem}{Teorema}[section]
+\newtheorem{lemma}{Lema}[section]
+\newtheorem{corollary}{Corolario}[section]
+\newtheorem{proposition}{Proposición}[section]
+\newtheorem{remark}{Observación}[section]
+
+\lstset{
+    language=Python,
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{red},
+    breaklines=true,
+    tabsize=4
+}
+
+\title{Informe Técnico: Enfoque de Programación Dinámica para\\el Problema de Selección Óptima de Talento}
+\author{Diseño y Análisis de Algoritmos}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\tableofcontents
+\newpage
+
+\section{Introducción}
+
+El problema de Selección Óptima de Talento, modelado como un problema de \textbf{Weighted Set Cover} (Cobertura de Conjuntos Ponderada), es conocido por su naturaleza NP-Hard en el caso general. Sin embargo, en escenarios prácticos de contratación donde el número de habilidades requeridas ($m$) es significativamente menor que el número de candidatos disponibles ($n$), el problema exhibe propiedades que permiten una solución exacta eficiente mediante \textbf{Programación Dinámica}.
+
+Este informe detalla un algoritmo basado en máscaras de bits (bitmasking) que aprovecha esta asimetría en los parámetros, logrando una complejidad tratable para valores moderados de $m$, clasificando el enfoque dentro de la teoría de \textbf{Fixed-Parameter Tractability (FPT)}.
+
+\section{Modelación Matemática del Problema}
+
+\subsection{Definición Formal}
+
+\begin{definition}[Problema de Cobertura de Habilidades Ponderado]
+
+Sea:
+\begin{itemize}
+    \item $E = \{e_1, e_2, \ldots, e_n\}$ el conjunto de empleados disponibles
+    \item $S = \{s_1, s_2, \ldots, s_k\}$ el conjunto de habilidades disponibles en el sistema
+    \item Para cada empleado $e_i \in E$: 
+    \begin{itemize}
+        \item $c_i \in \mathbb{R}_{\geq 0}$ su costo por hora (salario)
+        \item $L_i(s) \in \{0\} \cup [1, 10]$ el nivel de dominio en la habilidad $s$
+    \end{itemize}
+    \item $R = \{r_0, r_1, \ldots, r_{m-1}\}$ donde cada $r_j = (s_j, l_j)$ con $s_j \in S$ y $l_j \in [1, 10]$, representando los $m$ requerimientos del cliente (habilidad y nivel mínimo)
+\end{itemize}
+
+El problema consiste en encontrar un subconjunto $X \subseteq E$ tal que:
+
+\begin{equation}
+\min \sum_{e_i \in X} c_i
+\end{equation}
+
+sujeto a la restricción de cobertura:
+
+\begin{equation}
+\forall r_j = (s_j, l_j) \in R, \exists e_i \in X : L_i(s_j) \geq l_j
+\end{equation}
+
+\end{definition}
+
+\subsection{Representación mediante Máscaras de Bits}
+
+La clave del enfoque de Programación Dinámica es representar los subconjuntos de requerimientos cubiertos mediante enteros de $m$ bits.
+
+\begin{definition}[Máscara de Cobertura]
+Sea $R = \{r_0, r_1, \ldots, r_{m-1}\}$ el conjunto de requerimientos indexados, donde cada $r_j = (s_j, l_j)$. Para cualquier subconjunto $T \subseteq R$, definimos su \textbf{máscara de cobertura} como:
+
+\[
+\text{mask}(T) = \sum_{r_j \in T} 2^j
+\]
+
+Equivalentemente, el bit $j$-ésimo de $\text{mask}(T)$ es 1 si y solo si $r_j \in T$.
+\end{definition}
+
+\begin{definition}[Máscara de un Empleado]
+Para un empleado $e_i$, su \textbf{máscara de habilidades} $M_i$ representa el conjunto de requerimientos que puede satisfacer:
+
+\[
+M_i = \sum_{\{j : L_i(s_j) \geq l_j\}} 2^j
+\]
+
+donde $r_j = (s_j, l_j)$ es el $j$-ésimo requerimiento en $R$.
+\end{definition}
+
+Esta representación permite operaciones de conjuntos en $O(1)$:
+\begin{itemize}
+    \item \textbf{Unión}: $A \cup B \equiv A \mid B$ (OR bit a bit)
+    \item \textbf{Intersección}: $A \cap B \equiv A \land B$ (AND bit a bit)
+    \item \textbf{Verificar cobertura total}: $\text{mask} = 2^m - 1$
+\end{itemize}
+
+\subsection{Complejidad Computacional del Problema}
+
+\begin{theorem}[NP-Hardness]
+El problema de selección óptima de talento es NP-Hard.
+\end{theorem}
+
+\begin{proof}
+Por reducción desde el Weighted Set Cover Problem (WSC). Dada una instancia de WSC con universo $U$ y familia de conjuntos $\mathcal{A}$, construimos una instancia equivalente donde cada elemento del universo es un requerimiento con nivel 1 y cada conjunto es un empleado. La reducción es polinomial y preserva soluciones óptimas.
+\end{proof}
+
+\begin{remark}[Motivación para DP]
+Aunque el problema es NP-Hard en general, la complejidad está parametrizada. Mientras que Backtracking tiene complejidad $O(2^n)$ (exponencial en empleados), la Programación Dinámica logra $O(n \cdot 2^m)$ (exponencial solo en requerimientos). En aplicaciones reales, típicamente $m \ll n$, haciendo DP significativamente superior.
+\end{remark}
+
+\section{Principios de Programación Dinámica Aplicados}
+
+\subsection{Subestructura Óptima}
+
+\begin{theorem}[Subestructura Óptima]
+Sea $\text{OPT}(S, i)$ el costo mínimo para cubrir los requerimientos en la máscara $S$ usando únicamente empleados del conjunto $\{e_1, \ldots, e_i\}$. Entonces:
+\begin{equation}
+\text{OPT}(S, i) = \min\{\text{OPT}(S, i-1), \text{OPT}(S \land \neg M_i, i-1) + c_i\}
+\end{equation}
+donde el primer término corresponde a no incluir $e_i$ y el segundo a incluirlo.
+\end{theorem}
+
+\begin{proof}
+Consideremos una solución óptima $X^*$ para cubrir $S$ usando $\{e_1, \ldots, e_i\}$.
+
+\textbf{Caso 1}: Si $e_i \notin X^*$, entonces $X^*$ usa solo empleados de $\{e_1, \ldots, e_{i-1}\}$. Por optimalidad, su costo es $\text{OPT}(S, i-1)$.
+
+\textbf{Caso 2}: Si $e_i \in X^*$, entonces $X^* \setminus \{e_i\}$ debe cubrir los requerimientos $S \land \neg M_i$ (aquellos de $S$ no cubiertos por $e_i$) usando $\{e_1, \ldots, e_{i-1}\}$. Si existiera una solución mejor para ese subproblema, podríamos mejorar $X^*$, contradiciendo su optimalidad.
+
+Por lo tanto, $\text{OPT}(S, i)$ es el mínimo entre ambos casos.
+\end{proof}
+
+\subsection{Superposición de Subproblemas}
+
+\begin{proposition}[Superposición de Subproblemas]
+Al resolver el problema mediante enumeración recursiva, múltiples caminos de decisión conducen al mismo subproblema (cubrir un mismo subconjunto $S$ de requerimientos).
+\end{proposition}
+
+\begin{proof}
+Consideremos dos secuencias diferentes de decisiones:
+\begin{itemize}
+    \item Secuencia 1: Seleccionar $e_1$, luego $e_3$
+    \item Secuencia 2: Seleccionar $e_3$, luego $e_1$
+\end{itemize}
+
+Ambas secuencias resultan en el mismo estado: $S = M_1 \cup M_3$ (los requerimientos cubiertos por $e_1$ y $e_3$). La propiedad conmutativa de la unión de conjuntos garantiza que el orden de selección no afecta el conjunto cubierto.
+
+Por lo tanto, el número de subproblemas distintos está acotado por $2^m$ (número de subconjuntos posibles de $R$), no por $2^n$ (número de subconjuntos de empleados). Esto justifica el uso de memorización/tabulación.
+\end{proof}
+
+\subsection{Definición del Estado}
+
+\begin{definition}[Estado DP]
+$DP[S]$ representa el costo mínimo para cubrir \textbf{al menos} todos los requerimientos cuyos bits están en 1 en la máscara $S \in \{0, 1, \ldots, 2^m - 1\}$, utilizando un subconjunto de los empleados considerados (según el algoritmo 0/1).
+\end{definition}
+
+\begin{remark}
+La definición ``al menos'' es consistente con las transiciones por OR: al agregar un empleado $e_i$ a una solución que cubre $S$, la nueva cobertura es $S \mid M_i \supseteq S$. Los requerimientos adicionales cubiertos ``de más'' no afectan la validez ni el costo.
+\end{remark}
+
+\begin{itemize}
+    \item \textbf{Estado inicial}: $DP[0] = 0$ (costo cero para cubrir ningún requerimiento)
+    \item \textbf{Estados inválidos}: $DP[S] = \infty$ para $S \neq 0$ inicialmente
+    \item \textbf{Estado objetivo}: $DP[2^m - 1]$ (todos los requerimientos cubiertos)
+\end{itemize}
+
+\subsection{Relación de Recurrencia}
+
+\begin{remark}[Recurrencia y elección de implementación]
+La recurrencia natural del enfoque 0/1 se expresa mediante $\text{OPT}(S,i)$ (Teorema de Subestructura Óptima). En la práctica, implementamos una tabulación en un solo arreglo $DP$ recorriendo $S$ en orden inverso para simular la transición de $\text{OPT}(\cdot,i-1)$ a $\text{OPT}(\cdot,i)$.
+\end{remark}
+
+\section{Algoritmo Propuesto}
+
+\subsection{Preprocesamiento}
+
+Antes de ejecutar la DP, calculamos la máscara de cada empleado:
+
+\begin{algorithm}[H]
+\caption{Preprocesamiento de Máscaras}
+\begin{algorithmic}[1]
+\Function{ComputeMasks}{$\text{employees}, \text{requirements}$}
+    \State $\text{masks} \gets \text{empty dictionary}$
+    \For{\textbf{each} $e \in \text{employees}$}
+        \State $M_e \gets 0$
+        \For{$j \gets 0$ \textbf{to} $|\text{requirements}| - 1$}
+            \State $(s_j, l_j) \gets \text{requirements}[j]$ \Comment{$r_j = (s_j, l_j)$: habilidad y nivel}
+            \If{$e.\text{skill\_level}(s_j) \geq l_j$}
+                \State $M_e \gets M_e \mid (1 \ll j)$
+            \EndIf
+        \EndFor
+        \If{$M_e \neq 0$} \Comment{Descartar empleados que no cubren nada}
+            \State $\text{masks}[e] \gets M_e$
+        \EndIf
+    \EndFor
+    \State \textbf{return} $\text{masks}$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Algoritmo Principal}
+
+\begin{algorithm}[H]
+\caption{Programación Dinámica con Bitmask para Set Cover (0/1)}
+\begin{algorithmic}[1]
+\Function{SolveDP}{$\text{employees}, \text{requirements}$}
+    \State $m \gets |\text{requirements}|$
+    \State $\text{FULL\_MASK} \gets (1 \ll m) - 1$
+    \State $\text{masks} \gets \Call{ComputeMasks}{\text{employees}, \text{requirements}}$
+    
+    \State \Comment{Inicialización de la tabla DP}
+    \State $DP \gets \text{Array}[0 \ldots \text{FULL\_MASK}]$ initialized to $\infty$
+    \State $\text{parent} \gets \text{Array}[0 \ldots \text{FULL\_MASK}]$ initialized to $\text{None}$
+    \State $DP[0] \gets 0$
+    
+    \State \Comment{Procesamiento de cada empleado (patrón 0/1 knapsack)}
+    \For{\textbf{each} $(e, M_e) \in \text{masks}$}
+        \State $c_e \gets e.\text{cost}$
+        \State \Comment{Iteramos en orden inverso para usar cada empleado a lo sumo una vez}
+        \For{$S \gets \text{FULL\_MASK}$ \textbf{downto} $0$}
+            \If{$DP[S] < \infty$}
+                \State $\text{next\_S} \gets S \mid M_e$
+                \If{$DP[S] + c_e < DP[\text{next\_S}]$}
+                    \State $DP[\text{next\_S}] \gets DP[S] + c_e$
+                    \State $\text{parent}[\text{next\_S}] \gets (e, S)$
+                \EndIf
+            \EndIf
+        \EndFor
+    \EndFor
+    
+    \State \Comment{Verificar si existe solución}
+    \If{$DP[\text{FULL\_MASK}] = \infty$}
+        \State \textbf{return} $(\text{None}, \infty)$
+    \EndIf
+    
+    \State \Comment{Reconstruir solución (existe al menos un padre para FULL\_MASK)}
+    \State $\text{selected} \gets \emptyset$
+    \State $S \gets \text{FULL\_MASK}$
+    \While{$S \neq 0$}
+        \State $(e, \text{prev\_S}) \gets \text{parent}[S]$
+        \State $\text{selected}.\text{add}(e)$
+        \State $S \gets \text{prev\_S}$
+    \EndWhile
+    
+    \State \textbf{return} $(\text{selected}, DP[\text{FULL\_MASK}])$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+\subsection{Optimización: Iteración Inversa}
+
+\begin{lemma}[Correctitud de la Iteración Inversa]
+Al iterar $S$ desde $\text{FULL\_MASK}$ hasta $0$ para cada empleado, garantizamos que cada empleado se considera a lo sumo una vez por solución, siguiendo el patrón clásico de DP 0/1 (knapsack).
+\end{lemma}
+
+\begin{proof}
+Si iteráramos $S$ de menor a mayor, una actualización realizada al incluir el empleado $e$ podría ser reutilizada dentro de la misma iteración del mismo empleado, permitiendo cadenas de transiciones que ``reusen'' a $e$.
+
+Al iterar de mayor a menor, cualquier estado $\text{next\_S} = S \mid M_e$ satisface $\text{next\_S} \ge S$, y como $\text{next\_S}$ ya fue procesado en esa iteración, no puede usarse para generar nuevas transiciones con el mismo empleado. Por tanto, todas las actualizaciones que incluyen a $e$ se basan en valores previos (sin $e$), lo que implementa correctamente la recurrencia 0/1.
+\end{proof}
+
+\section{Análisis de Correctitud}
+
+\subsection{Demostración de Correctitud}
+
+\begin{theorem}[Correctitud del Algoritmo DP]
+El algoritmo de Programación Dinámica presentado retorna siempre el costo mínimo posible para cubrir todos los requerimientos, si existe una solución factible.
+\end{theorem}
+
+\begin{proof}
+La demostración procede por inducción sobre el número de empleados procesados.
+
+\textbf{Invariante de Bucle}: Después de procesar los primeros $i$ empleados, $DP[S]$ contiene el costo mínimo para cubrir al menos los requerimientos en $S$ usando un subconjunto de $\{e_1, \ldots, e_i\}$.
+
+\textbf{Caso Base ($i=0$)}:
+Antes de procesar cualquier empleado:
+\begin{itemize}
+    \item $DP[0] = 0$: cubrir ningún requerimiento tiene costo 0.
+    \item $DP[S] = \infty$ para $S \neq 0$: sin empleados es imposible cubrir requerimientos no vacíos.
+\end{itemize}
+
+\textbf{Hipótesis Inductiva}:
+Supongamos que después de procesar $i-1$ empleados, el invariante se cumple.
+
+\textbf{Paso Inductivo}:
+Al procesar el empleado $e_i$ con máscara $M_i$ y costo $c_i$:
+\begin{itemize}
+    \item Si no se usa $e_i$, el mejor costo para cubrir $S$ permanece como $DP[S]$.
+    \item Si se usa $e_i$, entonces se parte de algún estado previo $S'$ cubierto sin $e_i$ y se alcanza $S''=S' \mid M_i$ con costo $DP[S'] + c_i$.
+\end{itemize}
+
+El algoritmo considera ambas posibilidades (mantener el estado o actualizarlo) para todos los $S'$ al recorrer $S$ en orden inverso, implementando exactamente la recurrencia 0/1 de $\text{OPT}(\cdot,i)$. Por la hipótesis inductiva, las cantidades base son óptimas, y por tanto las actualizaciones preservan la optimalidad.
+
+\textbf{Conclusión}:
+Tras procesar todos los empleados, $DP[2^m - 1]$ contiene el costo mínimo para cubrir todos los requerimientos.
+\end{proof}
+
+\begin{corollary}[Completitud]
+Si existe una solución válida, el algoritmo la encuentra. Si $DP[2^m - 1] = \infty$, no existe ninguna combinación de empleados que cubra todos los requerimientos.
+\end{corollary}
+
+\subsection{Correctitud de la Reconstrucción}
+
+\begin{proposition}
+Si $DP[\text{FULL\_MASK}] < \infty$, la reconstrucción mediante el array $\text{parent}$ produce un conjunto de empleados válido y de costo óptimo.
+\end{proposition}
+
+\begin{proof}
+Como $DP[\text{FULL\_MASK}] < \infty$, el estado $\text{FULL\_MASK}$ fue alcanzado por alguna transición durante la DP, luego $\text{parent}[\text{FULL\_MASK}]$ está definido.
+
+Cada entrada $\text{parent}[S]$ almacena un par $(e, S')$ que certifica una transición $S' \to S$ al incluir el empleado $e$, de modo que:
+\[
+DP[S] = DP[S'] + c_e \quad \text{y} \quad S = S' \mid M_e.
+\]
+
+Al seguir la cadena de padres desde $S=\text{FULL\_MASK}$ hasta $S=0$, se obtiene un conjunto de empleados cuya cobertura incluye todos los requerimientos, y cuya suma de costos es exactamente $DP[\text{FULL\_MASK}]$, que es óptimo.
+\end{proof}
+
+\section{Análisis de Complejidad}
+
+\subsection{Complejidad Temporal}
+
+\begin{theorem}[Complejidad Temporal]
+La complejidad temporal del algoritmo es $\Theta(n \cdot 2^m)$, donde $n$ es el número de empleados y $m$ es el número de requerimientos.
+\end{theorem}
+
+\begin{proof}
+\textbf{1. Preprocesamiento (ComputeMasks)}: $O(n \cdot m)$.
+
+\textbf{2. Bucle Principal}: $n$ iteraciones externas y $2^m$ estados internos, con $O(1)$ por transición: $O(n \cdot 2^m)$.
+
+\textbf{3. Reconstrucción}: en el peor caso se siguen a lo sumo $n$ enlaces de padre: $O(n)$.
+
+Por tanto,
+\[
+T(n,m)=O(nm) + O(n2^m) + O(n) = O(n2^m),
+\]
+y el término dominante es $n2^m$ para $m \ge 1$.
+\end{proof}
+
+\subsection{Complejidad Espacial}
+
+\begin{theorem}[Complejidad Espacial]
+La complejidad espacial del algoritmo es $\Theta(2^m)$.
+\end{theorem}
+
+\begin{proof}
+Se almacenan los arreglos $DP$ y $\text{parent}$, ambos de tamaño $2^m$, por lo que el espacio total es $\Theta(2^m)$ (ignorando términos menores como el diccionario de máscaras).
+\end{proof}
+
+\section{Análisis Paramétrico y Cotas}
+
+\subsection{Fixed-Parameter Tractability (FPT)}
+
+\begin{definition}[Problema FPT]
+Un problema parametrizado $(I, k)$ es \textbf{Fixed-Parameter Tractable} si existe un algoritmo con complejidad:
+\[
+T(|I|, k) = f(k) \cdot |I|^{O(1)}
+\]
+donde $f$ es una función computable que depende únicamente del parámetro $k$, y $|I|$ es el tamaño de la entrada.
+\end{definition}
+
+\begin{theorem}[FPT con Parámetro $m$]
+El problema de Selección Óptima de Talento es FPT cuando se parametriza por el número de requerimientos $m$.
+\end{theorem}
+
+\begin{proof}
+Nuestro algoritmo tiene complejidad $T(n, m) = 2^m \cdot n$. Identificando $k=m$, $f(k)=2^k$ y $|I|=n$, se cumple la definición de FPT.
+\end{proof}
+
+\begin{remark}[Cotas Inferiores Condicionales]
+Resultados en complejidad parametrizada~\cite{cygan2015parameterized} sugieren que, bajo hipótesis computacionales como la \textbf{Strong Exponential Time Hypothesis (SETH)}, es improbable que existan algoritmos significativamente más rápidos que $O(2^m \cdot n^{O(1)})$ para Set Cover parametrizado por el tamaño del universo. En este trabajo solo usamos este hecho como motivación teórica, sin reclamar optimalidad estricta.
+\end{remark}
+
+\begin{thebibliography}{9}
+\bibitem{cygan2015parameterized}
+Cygan, M., Fomin, F. V., Kowalik, \L., Lokshtanov, D., Marx, D., Pilipczuk, M., Pilipczuk, M., \& Saurabh, S. (2015).
+\textit{Parameterized Algorithms}.
+Springer.
+\end{thebibliography}
+
+\end{document}

@@ -11,13 +11,10 @@ class DPSolver(ProblemSolver):
     Este enfoque modela el problema como una variante del Weighted Set Cover
     usando representación de estados mediante máscaras de bits.
     
-    Estado DP:
-        dp[mask] = (costo_mínimo, conjunto_empleados) para cubrir los 
-                   requerimientos representados por el bitmask 'mask'
-    
-    Transición:
-        Para cada empleado e con máscara de cobertura 'emp_mask':
-        dp[mask | emp_mask] = min(dp[mask | emp_mask], dp[mask] + costo(e))
+    Algoritmo (patrón 0/1 knapsack):
+        - Para cada empleado e, iterar S desde FULL_MASK hasta 0
+        - Transición: dp[S | M_e] = min(dp[S | M_e], dp[S] + c_e)
+        - Reconstrucción mediante array parent
     
     Complejidad:
         - Temporal: O(n * 2^m) donde n = empleados, m = requerimientos
@@ -36,7 +33,8 @@ class DPSolver(ProblemSolver):
         self._skill_to_bit: dict[Skill, int] = {}
         self._employee_masks: dict[Employee, int] = {}
         self._full_mask: int = 0
-        self._dp: dict[int, tuple[float, set[Employee]]] = {}
+        self._dp: list[float] = []
+        self._parent: list[tuple[Employee, int] | None] = []
     
     def solve(self) -> Solution:
         """
@@ -66,7 +64,7 @@ class DPSolver(ProblemSolver):
         # Inicializar estructuras
         self._initialize_bitmasks()
         
-        # Filtrar empleados que no aportan nada
+        # Filtrar empleados que no aportan nada (máscara != 0)
         useful_employees = self._get_useful_employees()
         
         if not useful_employees:
@@ -88,6 +86,7 @@ class DPSolver(ProblemSolver):
         La máscara completa (full_mask) tiene todos los bits en 1.
         """
         self._skill_to_bit.clear()
+        self._employee_masks.clear()
         
         for i, skill in enumerate(self.client.requirements.keys()):
             self._skill_to_bit[skill] = i
@@ -104,7 +103,7 @@ class DPSolver(ProblemSolver):
             employee: El empleado a evaluar.
             
         Returns:
-            int: Bitmask donde bit i = 1 si el empleado cubre el requerimiento i.
+            int: Bitmask donde bit j = 1 si el empleado cubre el requerimiento j.
         """
         mask = 0
         for skill, required_level in self.client.requirements.items():
@@ -115,10 +114,10 @@ class DPSolver(ProblemSolver):
     
     def _get_useful_employees(self) -> list[tuple[Employee, int]]:
         """
-        Filtra y prepara los empleados que cubren al menos un requerimiento.
+        Filtra empleados que cubren al menos un requerimiento (máscara != 0).
         
         Returns:
-            Lista de tuplas (empleado, máscara) ordenada por eficiencia.
+            Lista de tuplas (empleado, máscara).
         """
         useful = []
         
@@ -128,71 +127,64 @@ class DPSolver(ProblemSolver):
                 self._employee_masks[employee] = mask
                 useful.append((employee, mask))
         
-        # Ordenar por eficiencia (más cobertura por menos costo primero)
-        # Esto puede mejorar la poda en algunos casos
-        useful.sort(key=lambda x: -bin(x[1]).count('1') / x[0].salary_per_hour)
-        
         return useful
     
     def _run_dp(self, employees: list[tuple[Employee, int]]) -> None:
         """
-        Ejecuta el algoritmo de programación dinámica bottom-up.
+        Ejecuta el algoritmo de programación dinámica con patrón 0/1.
         
-        Usa un enfoque iterativo para evitar límites de recursión.
+        Implementación según el informe:
+        - Para cada empleado, iterar S desde FULL_MASK hasta 0
+        - Esto garantiza que cada empleado se usa a lo sumo una vez
         
         Args:
             employees: Lista de (empleado, máscara) a considerar.
         """
-        # Estado inicial: sin cobertura, costo 0, sin empleados
-        # dp[mask] = (costo_mínimo, conjunto_empleados)
-        self._dp = {0: (0.0, set())}
+        INF = float('inf')
         
-        # Para cada estado actual, intentar agregar cada empleado
-        for mask in range(self._full_mask + 1):
-            if mask not in self._dp:
-                continue
+        # Inicialización de la tabla DP
+        # dp[S] = costo mínimo para cubrir al menos los requerimientos en S
+        self._dp = [INF] * (self._full_mask + 1)
+        self._parent = [None] * (self._full_mask + 1)
+        self._dp[0] = 0.0  # Estado inicial: costo 0 para cubrir nada
+        
+        # Procesamiento de cada empleado (patrón 0/1 knapsack)
+        for employee, emp_mask in employees:
+            cost_e = employee.salary_per_hour
             
-            current_cost, current_employees = self._dp[mask]
-            
-            # Poda: si ya encontramos solución completa más barata, saltar
-            if self._full_mask in self._dp:
-                best_complete_cost = self._dp[self._full_mask][0]
-                if current_cost >= best_complete_cost:
-                    continue
-            
-            for employee, emp_mask in employees:
-                # Saltar si el empleado ya está seleccionado
-                if employee in current_employees:
-                    continue
-                
-                # Calcular nuevo estado
-                new_mask = mask | emp_mask
-                new_cost = current_cost + employee.salary_per_hour
-                
-                # Poda: no expandir si el nuevo costo ya supera la mejor solución
-                if self._full_mask in self._dp:
-                    if new_cost >= self._dp[self._full_mask][0]:
-                        continue
-                
-                # Actualizar si encontramos mejor camino a new_mask
-                if new_mask not in self._dp or new_cost < self._dp[new_mask][0]:
-                    new_employees = current_employees | {employee}
-                    self._dp[new_mask] = (new_cost, new_employees)
+            # Iteramos en orden inverso para usar cada empleado a lo sumo una vez
+            for S in range(self._full_mask, -1, -1):
+                if self._dp[S] < INF:
+                    next_S = S | emp_mask
+                    new_cost = self._dp[S] + cost_e
+                    
+                    if new_cost < self._dp[next_S]:
+                        self._dp[next_S] = new_cost
+                        self._parent[next_S] = (employee, S)
     
     def _extract_solution(self) -> Solution:
         """
-        Extrae la mejor solución del estado final de la DP.
+        Extrae la mejor solución reconstruyendo desde el estado final.
         
         Returns:
             Solution: La solución óptima o inválida si no existe.
         """
-        if self._full_mask not in self._dp:
-            # No se puede cubrir todos los requerimientos
+        # Verificar si existe solución
+        if self._dp[self._full_mask] == float('inf'):
             self.best_solution = Solution.invalid()
             return self.best_solution
         
-        cost, employees = self._dp[self._full_mask]
-        self.best_solution = Solution(employees, cost, True)
+        # Reconstruir solución siguiendo la cadena de parent
+        selected: set[Employee] = set()
+        S = self._full_mask
+        
+        while S != 0 and self._parent[S] is not None:
+            employee, prev_S = self._parent[S]
+            selected.add(employee)
+            S = prev_S
+        
+        cost = self._dp[self._full_mask]
+        self.best_solution = Solution(selected, cost, True)
         return self.best_solution
     
     def get_dp_stats(self) -> dict:
@@ -204,7 +196,7 @@ class DPSolver(ProblemSolver):
             dict: Estadísticas incluyendo estados visitados, espacio total, etc.
         """
         total_states = 1 << len(self.client.requirements)
-        visited_states = len(self._dp)
+        visited_states = sum(1 for x in self._dp if x < float('inf'))
         
         return {
             "total_possible_states": total_states,
@@ -213,7 +205,7 @@ class DPSolver(ProblemSolver):
             "num_requirements": len(self.client.requirements),
             "num_employees": len(self.employees),
             "useful_employees": len(self._employee_masks),
-            "solution_found": self._full_mask in self._dp
+            "solution_found": self._dp[self._full_mask] < float('inf') if self._dp else False
         }
 
 
@@ -223,9 +215,7 @@ class DPSolverOptimized(DPSolver):
     
     Optimizaciones:
     1. Eliminación de empleados dominados
-    2. Pre-ordenamiento por eficiencia
-    3. Poda temprana más agresiva
-    4. Uso de diccionario sparse en lugar de array denso
+    2. Combinación de empleados con misma máscara (quedarse con el más barato)
     """
     
     def __init__(self, employees: set[Employee], client: Client):
@@ -233,37 +223,58 @@ class DPSolverOptimized(DPSolver):
     
     def _get_useful_employees(self) -> list[tuple[Employee, int]]:
         """
-        Versión optimizada que elimina empleados dominados.
+        Versión optimizada que:
+        1. Combina empleados con misma máscara (conserva el más barato)
+        2. Elimina empleados dominados
         
         Un empleado A está dominado por B si:
         - B cubre todo lo que A cubre (y posiblemente más)
         - B cuesta igual o menos que A
+        - B es estrictamente mejor (cubre más o cuesta menos)
         """
-        # Primero obtener todos los empleados útiles
-        useful = super()._get_useful_employees()
+        # Obtener todos los empleados útiles (máscara != 0)
+        all_useful = []
+        for employee in self.employees:
+            mask = self._get_employee_mask(employee)
+            if mask > 0:
+                self._employee_masks[employee] = mask
+                all_useful.append((employee, mask))
         
-        if len(useful) <= 1:
-            return useful
+        if len(all_useful) <= 1:
+            return all_useful
         
-        # Eliminar empleados dominados
+        # Paso 1: Combinar empleados con misma máscara (quedarse con el más barato)
+        mask_to_best: dict[int, Employee] = {}
+        for employee, mask in all_useful:
+            if mask not in mask_to_best:
+                mask_to_best[mask] = employee
+            elif employee.salary_per_hour < mask_to_best[mask].salary_per_hour:
+                mask_to_best[mask] = employee
+        
+        combined = [(emp, mask) for mask, emp in mask_to_best.items()]
+        
+        if len(combined) <= 1:
+            return combined
+        
+        # Paso 2: Eliminar empleados dominados
         non_dominated = []
         
-        for i, (emp_a, mask_a) in enumerate(useful):
+        for i, (emp_a, mask_a) in enumerate(combined):
             is_dominated = False
             
-            for j, (emp_b, mask_b) in enumerate(useful):
+            for j, (emp_b, mask_b) in enumerate(combined):
                 if i == j:
                     continue
                 
                 # B domina a A si:
                 # 1. B cubre todo lo que A cubre: (mask_a & mask_b) == mask_a
-                # 2. B cuesta igual o menos: emp_b.salary <= emp_a.salary
-                # 3. B cubre más o cuesta menos (no son idénticos)
-                covers_same_or_more = (mask_a & mask_b) == mask_a
+                # 2. B cuesta igual o menos
+                # 3. B es estrictamente mejor (cubre más O cuesta menos)
+                covers_all_of_a = (mask_a & mask_b) == mask_a
                 costs_same_or_less = emp_b.salary_per_hour <= emp_a.salary_per_hour
-                strictly_better = (mask_b > mask_a) or (emp_b.salary_per_hour < emp_a.salary_per_hour)
+                strictly_better = (mask_b != mask_a) or (emp_b.salary_per_hour < emp_a.salary_per_hour)
                 
-                if covers_same_or_more and costs_same_or_less and strictly_better:
+                if covers_all_of_a and costs_same_or_less and strictly_better:
                     is_dominated = True
                     break
             
